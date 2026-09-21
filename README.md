@@ -1,6 +1,7 @@
 # Junction
 
 Windows용 소형 프로젝트 런처. 프로젝트에 폴더, 웹 링크, 로컬 앱, 터미널 위치, 명령어와 자유메모를 모읍니다.
+
 <img width="422" height="552" alt="image" src="https://github.com/user-attachments/assets/65e1614e-cc5a-403e-953a-b7f108f21705" />
 
 ## 설치 및 사용

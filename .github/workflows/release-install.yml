@@ -1,0 +1,77 @@
+name: Released installer verification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/release-install.yml'
+      - 'scripts/verify-release.mjs'
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: Install and use published Windows release
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Download and install published v0.2.0
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $data = Join-Path $env:APPDATA 'com.junction.desktop'
+          if (Test-Path $data) { throw 'Expected a clean disposable user profile' }
+          $root = Join-Path $env:RUNNER_TEMP 'junction-release-check'
+          New-Item -ItemType Directory -Path $root | Out-Null
+          $asset = 'Junction_0.2.0_x64-setup.exe'
+          $base = 'https://github.com/ureure2/Junction/releases/download/v0.2.0'
+          $installer = Join-Path $root $asset
+          Invoke-WebRequest "$base/$asset" -OutFile $installer
+          Invoke-WebRequest "$base/$asset.sha256" -OutFile "$installer.sha256"
+          $expected = ((Get-Content "$installer.sha256" -Raw).Trim() -split '\s+')[0].ToLower()
+          $actual = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLower()
+          if ($expected -notmatch '^[0-9a-f]{64}$' -or $actual -ne $expected) { throw 'Checksum mismatch' }
+          if ($actual -ne 'c66ea3afbee87a51c38626115d074a50a784534dee7e12215f0603f611cb9998') { throw 'Release asset changed; review before testing' }
+          $install = Join-Path $root 'installed'
+          $result = Start-Process -FilePath $installer -ArgumentList '/S', "/D=$install" -WindowStyle Hidden -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw "Installer failed: $($result.ExitCode)" }
+          $exe = Join-Path $install 'junction.exe'
+          if (!(Test-Path $exe)) { throw 'Installed executable missing' }
+          "JUNCTION_INSTALLED_EXE=$exe" >> $env:GITHUB_ENV
+          "JUNCTION_INSTALL_DIR=$install" >> $env:GITHUB_ENV
+          "Verified SHA256: $actual" >> $env:GITHUB_STEP_SUMMARY
+          'Published v0.2.0 installer completed successfully on a fresh Windows runner.' >> $env:GITHUB_STEP_SUMMARY
+      - name: Launch, save, close and reopen actual installed app
+        run: node scripts/verify-release.mjs
+      - name: Uninstall and confirm removal
+        if: always() && env.JUNCTION_INSTALL_DIR != ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $install = [IO.Path]::GetFullPath($env:JUNCTION_INSTALL_DIR)
+          $allowed = [IO.Path]::GetFullPath((Join-Path $env:RUNNER_TEMP 'junction-release-check')) + [IO.Path]::DirectorySeparatorChar
+          if (!$install.StartsWith($allowed, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected uninstall target' }
+          $uninstaller = Join-Path $install 'uninstall.exe'
+          if (!(Test-Path $uninstaller)) { throw 'Uninstaller missing' }
+          $result = Start-Process -FilePath $uninstaller -ArgumentList '/S' -WindowStyle Hidden -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw "Uninstaller failed: $($result.ExitCode)" }
+          $deadline = (Get-Date).AddSeconds(60)
+          while ((Test-Path $env:JUNCTION_INSTALLED_EXE) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
+          if (Test-Path $env:JUNCTION_INSTALLED_EXE) { throw 'Application executable remains after uninstall' }
+          $entry = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'Junction' }
+          if ($entry) { throw 'Junction uninstall registry entry remains' }
+          'Uninstall completed; application executable and uninstall registration removed.' >> $env:GITHUB_STEP_SUMMARY
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: released-installer-evidence
+          path: release-verification/
+          if-no-files-found: ignore

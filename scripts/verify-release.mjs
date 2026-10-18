@@ -84,7 +84,7 @@ try {
   await expect(page.getByLabel('프로젝트 선택').locator('option:checked')).toHaveText(projectName);
   await page.getByRole('button', { name: '메모 펼치기', exact: true }).click();
   await expect(page.getByLabel('프로젝트 자유메모')).toHaveValue(note);
-  await expect(page.getByRole('button', { name: '검증 폴더', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '검증 폴더 실행', exact: true })).toBeVisible();
   await page.screenshot({ path: path.join(evidence, '03-reopened.png') });
   await closeNormally();
   await writeFile(path.join(evidence, 'result.json'), JSON.stringify({ release: 'v0.2.0', actualInstalledApp: true, projectSaved: true, itemSaved: true, noteSaved: true, persistedAcrossRestart: true, normalClose: true }, null, 2));

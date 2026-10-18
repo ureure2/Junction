@@ -26,6 +26,8 @@ jobs:
           cache: npm
       - name: Install frontend dependencies
         run: npm ci
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
       - name: Unit tests
         run: npm test
       - name: Frontend build

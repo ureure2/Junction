@@ -48,6 +48,14 @@ jobs:
           "JUNCTION_INSTALL_DIR=$install" >> $env:GITHUB_ENV
           "Verified SHA256: $actual" >> $env:GITHUB_STEP_SUMMARY
           'Published v0.2.0 installer completed successfully on a fresh Windows runner.' >> $env:GITHUB_STEP_SUMMARY
+      - name: Enable test-only WebView connection on elevated runner
+        shell: pwsh
+        run: |
+          # WebView2 150+ ignores environment overrides for elevated hosts.
+          # This policy exists only in the disposable runner and only for junction.exe.
+          $key = 'HKLM:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments'
+          New-Item -Path $key -Force | Out-Null
+          New-ItemProperty -Path $key -Name 'junction.exe' -Value '--remote-debugging-port=9222 --remote-debugging-address=127.0.0.1' -PropertyType String -Force | Out-Null
       - name: Launch, save, close and reopen actual installed app
         run: node scripts/verify-release.mjs
       - name: Uninstall and confirm removal
@@ -68,6 +76,11 @@ jobs:
           $entry = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'Junction' }
           if ($entry) { throw 'Junction uninstall registry entry remains' }
           'Uninstall completed; application executable and uninstall registration removed.' >> $env:GITHUB_STEP_SUMMARY
+      - name: Remove test-only WebView connection policy
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-ItemProperty -Path 'HKLM:\Software\Policies\Microsoft\Edge\WebView2\AdditionalBrowserArguments' -Name 'junction.exe' -ErrorAction SilentlyContinue
       - name: Upload verification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows tests and build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+      - name: Unit tests
+        run: npm test
+      - name: Frontend build
+        run: npm run build
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --no-self-update
+      - name: Check Windows dependency scope
+        shell: pwsh
+        run: |
+          $tree = cargo +stable tree --manifest-path src-tauri/Cargo.toml --locked --target x86_64-pc-windows-msvc --prefix none
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($tree -match '^glib v') { throw 'glib now affects Windows; reassess Dependabot alert #1.' }
+      - name: Rust tests
+        run: cargo +stable test --manifest-path src-tauri/Cargo.toml --locked
+      - name: Install Edge for UI tests
+        run: npx playwright install msedge
+      - name: UI tests
+        run: npm run test:e2e
+      - name: Windows app build
+        run: npm run tauri -- build --no-bundle
+      - name: Upload failed UI test results
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ui-test-results
+          path: test-results/
+          if-no-files-found: ignore

@@ -1,4 +1,4 @@
-import { type Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 export async function menuAction(page: Page, name: string) {
   await page.getByLabel("앱 메뉴", { exact: true }).click();
   await page
@@ -21,6 +21,9 @@ export async function createProject(
   await page.getByLabel("프로젝트 이름").fill(name);
   await page.getByLabel("기본 작업 폴더").fill(folder);
   await page.getByRole("button", { name: "프로젝트 저장" }).click();
+  await expect(page.getByLabel("프로젝트 이름")).toBeHidden();
+  await expect(page.getByLabel("프로젝트 선택").locator("option:checked")).toHaveText(name);
+  await expect(page.getByLabel("프로젝트 자유메모")).toBeHidden();
 }
 export async function addItem(
   page: Page,

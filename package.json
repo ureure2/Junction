@@ -13,7 +13,7 @@
     "package": "tauri build --bundles nsis"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.0.0",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
